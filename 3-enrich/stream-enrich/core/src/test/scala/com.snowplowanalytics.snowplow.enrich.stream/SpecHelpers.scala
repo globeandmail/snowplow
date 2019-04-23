@@ -23,6 +23,7 @@ import org.json4s.jackson.JsonMethods._
 import org.specs2.matcher.{Expectable, Matcher}
 import scalaz._
 import Scalaz._
+import com.snowplowanalytics.snowplow.enrich.common.adapters.AdapterRegistry
 import common.outputs.EnrichedEvent
 import common.utils.JsonUtils
 import common.enrichments.EnrichmentRegistry
@@ -161,9 +162,10 @@ object SpecHelpers {
         BufferConfig(1000L, 100L, 1200L),
         "appName"
       ),
+      None,
       monitoring = None
     )
-    new TestSource(config, resolver, enrichmentRegistry, None)
+    new TestSource(config, resolver, adapterRegistry, enrichmentRegistry, None)
   }
   val igluCentralDefaultConfig =
     """{
@@ -310,5 +312,6 @@ object SpecHelpers {
     e => throw new RuntimeException(e),
     s => s
   )
+  val adapterRegistry = new AdapterRegistry(Map.empty)
 
 }

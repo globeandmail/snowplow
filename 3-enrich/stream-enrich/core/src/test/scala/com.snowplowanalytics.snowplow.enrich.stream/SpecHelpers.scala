@@ -24,6 +24,7 @@ import org.specs2.matcher.{Expectable, Matcher}
 import scalaz._
 import Scalaz._
 import com.snowplowanalytics.snowplow.enrich.common.adapters.AdapterRegistry
+import com.snowplowanalytics.snowplow.enrich.common.adapters.registry.RemoteAdapter
 import common.outputs.EnrichedEvent
 import common.utils.JsonUtils
 import common.enrichments.EnrichmentRegistry
@@ -312,6 +313,7 @@ object SpecHelpers {
     e => throw new RuntimeException(e),
     s => s
   )
-  val adapterRegistry = new AdapterRegistry(Map.empty)
 
+  // Init AdapterRegistry with one RemoteAdapter used for integration tests
+  val adapterRegistry = new AdapterRegistry(Map(("remoteVendor", "v42") -> new RemoteAdapter("http://localhost:9090/", None, None)))
 }

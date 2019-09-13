@@ -20,7 +20,8 @@ package registry
 // Java
 import java.net.URI
 
-import com.snowplowanalytics.refererparser.SearchReferer
+// Apache
+import org.apache.http.client.utils.URIBuilder
 
 // Maven Artifact
 import org.apache.maven.artifact.versioning.DefaultArtifactVersion
@@ -41,6 +42,7 @@ import iglu.client.validation.ProcessingMessageMethods._
 // Snowplow referer-parser
 import com.snowplowanalytics.refererparser.Parser
 import com.snowplowanalytics.refererparser.Referer
+import com.snowplowanalytics.refererparser.SearchReferer
 
 // This project
 import utils.{ConversionUtils => CU}
@@ -110,10 +112,11 @@ case class RefererParserEnrichment(
    *         source and term, all Strings
    */
   def extractRefererDetails(uri: URI, pageHost: String): EitherT[IO, Exception, Option[Referer]] = {
+    val fixedURI = new URIBuilder(uri.toString).setScheme("http").build
     val io: EitherT[IO, Exception, Option[Referer]] = for {
       parser <- EitherT(Parser.create[IO](getClass.getResource(referersJsonPath).getPath))
-      r      <- EitherT.fromOption[IO](parser.parse(uri, Some(pageHost), domains), new Exception("No parseable referer"))
-
+      r <- EitherT
+        .fromOption[IO](parser.parse(fixedURI, Some(pageHost), domains), new Exception("No parseable referer"))
       t = r match {
         case s: SearchReferer => Some(s.term.flatMap(t => CU.fixTabsNewlines(t))).flatten
         case _                => None

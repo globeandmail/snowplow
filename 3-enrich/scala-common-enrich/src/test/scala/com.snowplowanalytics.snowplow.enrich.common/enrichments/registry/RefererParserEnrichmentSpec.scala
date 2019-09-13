@@ -45,6 +45,7 @@ class ExtractRefererDetailsSpec extends Specification with DataTables {
   This is a specification to test extractRefererDetails
   Parsing referer URIs should work                     $e1
   Tabs and newlines in search terms should be replaced $e2
+  Odd URI schemes should be handled                    $e3
   """
 
   val PageHost = "www.snowplowanalytics.com"
@@ -61,10 +62,10 @@ class ExtractRefererDetailsSpec extends Specification with DataTables {
       "Custom referer"   !! "https://www.internaldomain.com/path" ! Medium.Internal ! None ! None |
       "Unknown referer"  !! "http://www.spyfu.com/domain.aspx?d=3897225171967988459" ! Medium.Unknown ! None ! None |> {
       (_, refererUri, _, _, _) =>
-        val v = RefererParserEnrichment(List("www.internaldomain.com"), None)
+        val value: IO[Option[Referer]] = RefererParserEnrichment(List("www.internaldomain.com"), None)
           .extractRefererDetails(new URI(refererUri), PageHost)
-        val value: IO[Option[Referer]] = v.getOrElse(None)
-        val p                          = value.unsafeRunSync()
+          .getOrElse(None)
+        val p = value.unsafeRunSync()
         p must beOneOf(
           Some(InternalReferer),
           Some(UnknownReferer),
@@ -81,5 +82,12 @@ class ExtractRefererDetailsSpec extends Specification with DataTables {
         PageHost)
       .getOrElse(None)
     value.unsafeRunSync() must beSome(SearchReferer("Google", Some("gateway    oracle    cards    denise    linn")))
+  }
+
+  def e3 = {
+    val value: IO[Option[Referer]] = RefererParserEnrichment(List(), None)
+      .extractRefererDetails(new URI("android-app://m.facebook.com"), PageHost)
+      .getOrElse(None)
+    value.unsafeRunSync() must beSome(SocialReferer("Facebook"))
   }
 }

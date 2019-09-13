@@ -118,7 +118,7 @@ case class RefererParserEnrichment(
       r <- EitherT
         .fromOption[IO](parser.parse(fixedURI, Some(pageHost), domains), new Exception("No parseable referer"))
       t = r match {
-        case s: SearchReferer => Some(s.term.flatMap(t => CU.fixTabsNewlines(t))).flatten
+        case s: SearchReferer => s.term.flatMap(t => CU.fixTabsNewlines(t))
         case _                => None
       }
     } yield {

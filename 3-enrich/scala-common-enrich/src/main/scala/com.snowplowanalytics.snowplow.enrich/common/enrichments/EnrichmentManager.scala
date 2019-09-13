@@ -414,42 +414,40 @@ object EnrichmentManager {
       // Set the referrer details
       registry.getRefererParserEnrichment match {
         case Some(rp) => {
-          val io = rp.extractRefererDetails(u, event.page_urlhost).getOrElse(Some(UnknownReferer)).map { r =>
-            r match {
-              case Some(SearchReferer(source, term)) => {
-                event.refr_medium = CU.makeTsvSafe(SearchMedium.value)
-                event.refr_source = CU.makeTsvSafe(source)
-                event.refr_term   = CU.makeTsvSafe(term.orNull)
-              }
-              case Some(InternalReferer) => {
-                event.refr_medium = CU.makeTsvSafe(InternalMedium.value)
-                event.refr_source = CU.makeTsvSafe(null)
-                event.refr_term   = CU.makeTsvSafe(null)
-              }
-              case Some(SocialReferer(source)) => {
-                event.refr_medium = CU.makeTsvSafe(SocialMedium.value)
-                event.refr_source = CU.makeTsvSafe(source)
-                event.refr_term   = CU.makeTsvSafe(null)
-              }
-              case Some(EmailReferer(source)) => {
-                event.refr_medium = CU.makeTsvSafe(EmailMedium.value)
-                event.refr_source = CU.makeTsvSafe(source)
-                event.refr_term   = CU.makeTsvSafe(null)
-              }
-              case Some(PaidReferer(source)) => {
-                event.refr_medium = CU.makeTsvSafe(PaidMedium.value)
-                event.refr_source = CU.makeTsvSafe(source)
-                event.refr_term   = CU.makeTsvSafe(null)
-              }
-              case _ => { // case UnknownReferer
-                event.refr_medium = CU.makeTsvSafe(UnknownMedium.value)
-                event.refr_source = CU.makeTsvSafe(null)
-                event.refr_term   = CU.makeTsvSafe(null)
-              }
+          val io = rp.extractRefererDetails(u, event.page_urlhost).map {
+            case Some(SearchReferer(source, term)) => {
+              event.refr_medium = CU.makeTsvSafe(SearchMedium.value)
+              event.refr_source = CU.makeTsvSafe(source)
+              event.refr_term   = CU.makeTsvSafe(term.orNull)
             }
-
+            case Some(InternalReferer) => {
+              event.refr_medium = CU.makeTsvSafe(InternalMedium.value)
+              event.refr_source = CU.makeTsvSafe(null)
+              event.refr_term   = CU.makeTsvSafe(null)
+            }
+            case Some(SocialReferer(source)) => {
+              event.refr_medium = CU.makeTsvSafe(SocialMedium.value)
+              event.refr_source = CU.makeTsvSafe(source)
+              event.refr_term   = CU.makeTsvSafe(null)
+            }
+            case Some(EmailReferer(source)) => {
+              event.refr_medium = CU.makeTsvSafe(EmailMedium.value)
+              event.refr_source = CU.makeTsvSafe(source)
+              event.refr_term   = CU.makeTsvSafe(null)
+            }
+            case Some(PaidReferer(source)) => {
+              event.refr_medium = CU.makeTsvSafe(PaidMedium.value)
+              event.refr_source = CU.makeTsvSafe(source)
+              event.refr_term   = CU.makeTsvSafe(null)
+            }
+            case Some(UnknownReferer) => {
+              event.refr_medium = CU.makeTsvSafe(UnknownMedium.value)
+              event.refr_source = CU.makeTsvSafe(null)
+              event.refr_term   = CU.makeTsvSafe(null)
+            }
+            case None => ()
           }
-          io.unsafeRunSync()
+          io.value.unsafeRunSync()
         }
         case None => unitSuccess
       }

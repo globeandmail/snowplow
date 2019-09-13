@@ -441,7 +441,7 @@ object EnrichmentManager {
                 event.refr_source = CU.makeTsvSafe(source)
                 event.refr_term   = CU.makeTsvSafe(null)
               }
-              case None => { // case UnknownReferer
+              case _ => { // case UnknownReferer
                 event.refr_medium = CU.makeTsvSafe(UnknownMedium.value)
                 event.refr_source = CU.makeTsvSafe(null)
                 event.refr_term   = CU.makeTsvSafe(null)

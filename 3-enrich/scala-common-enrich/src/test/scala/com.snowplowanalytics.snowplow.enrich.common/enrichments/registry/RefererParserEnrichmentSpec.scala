@@ -61,7 +61,7 @@ class ExtractRefererDetailsSpec extends Specification with DataTables {
       "Custom referer"   !! "https://www.internaldomain.com/path" ! Medium.Internal ! None ! None |
       "Unknown referer"  !! "http://www.spyfu.com/domain.aspx?d=3897225171967988459" ! Medium.Unknown ! None ! None |> {
       (_, refererUri, _, _, _) =>
-        val v = RefererParserEnrichment(List("www.internaldomain.com"))
+        val v = RefererParserEnrichment(List("www.internaldomain.com"), None)
           .extractRefererDetails(new URI(refererUri), PageHost)
         val value: IO[Option[Referer]] = v.getOrElse(None)
         val p                          = value.unsafeRunSync()
@@ -75,7 +75,7 @@ class ExtractRefererDetailsSpec extends Specification with DataTables {
     }
 
   def e2 = {
-    val value: IO[Option[Referer]] = RefererParserEnrichment(List())
+    val value: IO[Option[Referer]] = RefererParserEnrichment(List(), None)
       .extractRefererDetails(
         new URI("http://www.google.com/search?q=%0Agateway%09oracle%09cards%09denise%09linn&hl=en&client=safari"),
         PageHost)

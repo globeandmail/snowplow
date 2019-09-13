@@ -70,7 +70,8 @@ object RefererParserEnrichment extends ParseableEnrichment {
     isParseable(config, schemaKey).flatMap(conf => {
       (for {
         param <- ScalazJson4sUtils.extract[List[String]](config, "parameters", "internalDomains")
-        enrich = RefererParserEnrichment(param)
+        referers = ScalazJson4sUtils.extract[String](config, "parameters", "referersLocation").toOption
+        enrich   = RefererParserEnrichment(param, referers)
       } yield enrich).toValidationNel
     })
 
@@ -82,10 +83,11 @@ object RefererParserEnrichment extends ParseableEnrichment {
  * @param domains List of internal domains
  */
 case class RefererParserEnrichment(
-  domains: List[String]
+  domains: List[String],
+  referersPath: Option[String]
 ) extends Enrichment {
 
-  private val referersJsonPath = "/referers.json"
+  private val referersJsonPath = referersPath.getOrElse("/referers.json")
 
   /**
    * A Scalaz Lens to update the term within

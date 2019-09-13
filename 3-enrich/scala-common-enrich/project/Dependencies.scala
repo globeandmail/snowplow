@@ -55,7 +55,7 @@ object Dependencies {
     val snowplowRawEvent = "0.1.0"
     val collectorPayload = "0.0.0"
     val schemaSniffer    = "0.0.0"
-    val refererParser    = "0.3.0"
+    val refererParser    = "0.5.0"
     val maxmindIplookups = "0.4.0"
     val json4s           = "3.2.11"
     val igluClient       = "0.5.0"
@@ -98,7 +98,7 @@ object Dependencies {
     val snowplowRawEvent = "com.snowplowanalytics"      %  "snowplow-thrift-raw-event"     % V.snowplowRawEvent
     val collectorPayload = "com.snowplowanalytics"      %  "collector-payload-1"           % V.collectorPayload
     val schemaSniffer    = "com.snowplowanalytics"      %  "schema-sniffer-1"              % V.schemaSniffer
-    val refererParser    = "com.snowplowanalytics"      %% "referer-parser"                % V.refererParser
+    val refererParser    = "com.snowplowanalytics"      %% "scala-referer-parser"                % V.refererParser
     val maxmindIplookups = "com.snowplowanalytics"      %% "scala-maxmind-iplookups"       % V.maxmindIplookups
     val json4sJackson    = "org.json4s"                 %% "json4s-jackson"                % V.json4s
     val json4sScalaz     = "org.json4s"                 %% "json4s-scalaz"                 % V.json4s

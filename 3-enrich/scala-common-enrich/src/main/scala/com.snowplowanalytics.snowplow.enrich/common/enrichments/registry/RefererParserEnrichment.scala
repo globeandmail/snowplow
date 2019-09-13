@@ -20,13 +20,17 @@ package registry
 // Java
 import java.net.URI
 
+import com.snowplowanalytics.refererparser.SearchReferer
+
 // Maven Artifact
 import org.apache.maven.artifact.versioning.DefaultArtifactVersion
 
 // Scalaz
 import scalaz._
 import Scalaz._
-
+import cats.effect.IO
+import cats.data.EitherT
+import java.net.URI
 // json4s
 import org.json4s.{DefaultFormats, JValue}
 
@@ -35,8 +39,8 @@ import iglu.client.{SchemaCriterion, SchemaKey}
 import iglu.client.validation.ProcessingMessageMethods._
 
 // Snowplow referer-parser
-import com.snowplowanalytics.refererparser.scala.{Parser => RefererParser}
-import com.snowplowanalytics.refererparser.scala.Referer
+import com.snowplowanalytics.refererparser.Parser
+import com.snowplowanalytics.refererparser.Referer
 
 // This project
 import utils.{ConversionUtils => CU}
@@ -81,11 +85,13 @@ case class RefererParserEnrichment(
   domains: List[String]
 ) extends Enrichment {
 
+  private val referersJsonPath = "/referers.json"
+
   /**
    * A Scalaz Lens to update the term within
    * a Referer object.
    */
-  private val termLens: Lens[Referer, MaybeString] = Lens.lensu((r, newTerm) => r.copy(term = newTerm), _.term)
+  private val termLens: Lens[SearchReferer, MaybeString] = Lens.lensu((r, newTerm) => r.copy(term = newTerm), _.term)
 
   /**
    * Extract details about the referer (sic).
@@ -101,9 +107,21 @@ case class RefererParserEnrichment(
    * @return a Tuple3 containing referer medium,
    *         source and term, all Strings
    */
-  def extractRefererDetails(uri: URI, pageHost: String): Option[Referer] =
-    for {
-      r <- RefererParser.parse(uri, pageHost, domains)
-      t = r.term.flatMap(t => CU.fixTabsNewlines(t))
-    } yield termLens.set(r, t)
+  def extractRefererDetails(uri: URI, pageHost: String): EitherT[IO, Exception, Option[Referer]] = {
+    val io: EitherT[IO, Exception, Option[Referer]] = for {
+      parser <- EitherT(Parser.create[IO](getClass.getResource(referersJsonPath).getPath))
+      r      <- EitherT.fromOption[IO](parser.parse(uri, Some(pageHost), domains), new Exception("No parseable referer"))
+
+      t = r match {
+        case s: SearchReferer => Some(s.term.flatMap(t => CU.fixTabsNewlines(t))).flatten
+        case _                => None
+      }
+    } yield {
+      (r, t) match {
+        case (r: SearchReferer, s) => if (s.isDefined) Some(r.copy(term = s)) else Some(r)
+        case _                     => Some(r)
+      }
+    }
+    io
+  }
 }

@@ -43,9 +43,10 @@ import com.snowplowanalytics.refererparser.{Medium, Referer}
 class ExtractRefererDetailsSpec extends Specification with DataTables {
   def is = s2"""
   This is a specification to test extractRefererDetails
-  Parsing referer URIs should work                     $e1
-  Tabs and newlines in search terms should be replaced $e2
-  Odd URI schemes should be handled                    $e3
+  Parsing referer URIs should work                                    $e1
+  Tabs and newlines in search terms should be replaced                $e2
+  Odd URI schemes should be handled                                   $e3
+  Google quick search app should be handled with custom referers.json $e4
   """
 
   val PageHost = "www.snowplowanalytics.com"
@@ -85,9 +86,21 @@ class ExtractRefererDetailsSpec extends Specification with DataTables {
   }
 
   def e3 = {
-    val value: IO[Option[Referer]] = RefererParserEnrichment(List(), None)
+    val value: IO[Option[Referer]] = RefererParserEnrichment(List(), None, true)
       .extractRefererDetails(new URI("android-app://m.facebook.com"), PageHost)
       .getOrElse(None)
     value.unsafeRunSync() must beSome(SocialReferer("Facebook"))
+
+    val value2: IO[Option[Referer]] = RefererParserEnrichment(List(), None, false)
+      .extractRefererDetails(new URI("android-app://m.facebook.com"), PageHost)
+      .getOrElse(None)
+    value2.unsafeRunSync() must beNone
+  }
+
+  def e4 = {
+    val value: IO[Option[Referer]] = RefererParserEnrichment(List(), None, true)
+      .extractRefererDetails(new URI("android-app://com.google.android.googlequicksearchbox"), PageHost)
+      .getOrElse(None)
+    value.unsafeRunSync() must beSome(SearchReferer("Google", None))
   }
 }

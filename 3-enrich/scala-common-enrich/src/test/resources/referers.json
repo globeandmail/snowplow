@@ -972,7 +972,8 @@
         "www.googleearth.fr",
         "webcache.googleusercontent.com",
         "encrypted.google.com",
-        "googlesyndicatedsearch.com"
+        "googlesyndicatedsearch.com",
+        "com.google.android.googlequicksearchbox"
       ],
       "parameters": [
         "q",

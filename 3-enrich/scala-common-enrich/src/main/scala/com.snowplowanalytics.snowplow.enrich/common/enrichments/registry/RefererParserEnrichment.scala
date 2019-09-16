@@ -75,8 +75,12 @@ object RefererParserEnrichment extends ParseableEnrichment {
       (for {
         param <- ScalazJson4sUtils.extract[List[String]](config, "parameters", "internalDomains")
         referers = ScalazJson4sUtils.extract[String](config, "parameters", "referersLocation").toOption
-        includeSchemas = ScalazJson4sUtils.extract[String](config, "parameters", "includeSchemas").toOption.flatMap(v => Try(v.toBoolean).toOption).getOrElse(false)
-        enrich   = RefererParserEnrichment(param, referers, includeSchemas)
+        includeSchemas = ScalazJson4sUtils
+          .extract[String](config, "parameters", "includeSchemas")
+          .toOption
+          .flatMap(v => Try(v.toBoolean).toOption)
+          .getOrElse(false)
+        enrich = RefererParserEnrichment(param, referers, includeSchemas)
       } yield enrich).toValidationNel
     })
 

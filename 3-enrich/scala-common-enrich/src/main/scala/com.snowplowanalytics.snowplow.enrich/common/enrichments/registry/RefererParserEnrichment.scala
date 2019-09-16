@@ -20,6 +20,8 @@ package registry
 // Java
 import java.net.URI
 
+import scala.util.Try
+
 // Apache
 import org.apache.http.client.utils.URIBuilder
 
@@ -73,7 +75,8 @@ object RefererParserEnrichment extends ParseableEnrichment {
       (for {
         param <- ScalazJson4sUtils.extract[List[String]](config, "parameters", "internalDomains")
         referers = ScalazJson4sUtils.extract[String](config, "parameters", "referersLocation").toOption
-        enrich   = RefererParserEnrichment(param, referers)
+        includeSchemas = ScalazJson4sUtils.extract[String](config, "parameters", "includeSchemas").toOption.flatMap(v => Try(v.toBoolean).toOption).getOrElse(false)
+        enrich   = RefererParserEnrichment(param, referers, includeSchemas)
       } yield enrich).toValidationNel
     })
 
@@ -86,7 +89,8 @@ object RefererParserEnrichment extends ParseableEnrichment {
  */
 case class RefererParserEnrichment(
   domains: List[String],
-  referersPath: Option[String]
+  referersPath: Option[String],
+  includeSchemas: Boolean = false
 ) extends Enrichment {
 
   private val referersJsonPath = referersPath.getOrElse("/referers.json")
@@ -112,7 +116,7 @@ case class RefererParserEnrichment(
    *         source and term, all Strings
    */
   def extractRefererDetails(uri: URI, pageHost: String): EitherT[IO, Exception, Option[Referer]] = {
-    val fixedURI = new URIBuilder(uri.toString).setScheme("http").build
+    val fixedURI = if (includeSchemas) new URIBuilder(uri.toString).setScheme("http").build else uri
     val io: EitherT[IO, Exception, Option[Referer]] = for {
       parser <- EitherT(Parser.create[IO](getClass.getResource(referersJsonPath).getPath))
       r <- EitherT

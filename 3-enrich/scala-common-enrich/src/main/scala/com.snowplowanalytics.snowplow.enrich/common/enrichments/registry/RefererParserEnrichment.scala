@@ -113,7 +113,7 @@ case class RefererParserEnrichment(
     val io: EitherT[IO, Exception, Option[Referer]] = for {
       parser <- EitherT(Parser.create[IO](getClass.getResource(referersJsonPath).getPath))
       r <- EitherT
-        .fromOption[IO](parser.parse(fixedURI, Some(pageHost), domains), new Exception("No parseable referer"))
+        .fromOption[IO](parser.parse(fixedURI, Some(pageHost), domains), new Exception("No parseable referer found in the URI"))
       t = r match {
         case s: SearchReferer => s.term.flatMap(t => CU.fixTabsNewlines(t))
         case _                => None

@@ -20,37 +20,26 @@ package registry
 // Java
 import java.net.URI
 
-import scala.util.Try
-
 // Apache
 import org.apache.http.client.utils.URIBuilder
 
-// Maven Artifact
-import org.apache.maven.artifact.versioning.DefaultArtifactVersion
-
-// Scalaz
-import scalaz._
-import Scalaz._
-import cats.effect.IO
+// Scala
+import scala.util.Try
 import cats.data.EitherT
-import java.net.URI
+import cats.effect.IO
+import scalaz._
+
 // json4s
 import org.json4s.{DefaultFormats, JValue}
 
 // Iglu
-import iglu.client.{SchemaCriterion, SchemaKey}
-import iglu.client.validation.ProcessingMessageMethods._
+import com.snowplowanalytics.iglu.client.{SchemaCriterion, SchemaKey}
 
 // Snowplow referer-parser
-import com.snowplowanalytics.refererparser.Parser
-import com.snowplowanalytics.refererparser.Referer
-import com.snowplowanalytics.refererparser.SearchReferer
+import com.snowplowanalytics.refererparser.{Parser, Referer, SearchReferer}
 
 // This project
-import utils.{ConversionUtils => CU}
-import utils.MapTransformer
-import utils.MapTransformer._
-import utils.ScalazJson4sUtils
+import com.snowplowanalytics.snowplow.enrich.common.utils.{ScalazJson4sUtils, ConversionUtils => CU}
 
 /**
  * Companion object. Lets us create a
@@ -75,12 +64,12 @@ object RefererParserEnrichment extends ParseableEnrichment {
       (for {
         param <- ScalazJson4sUtils.extract[List[String]](config, "parameters", "internalDomains")
         referers = ScalazJson4sUtils.extract[String](config, "parameters", "referersLocation").toOption
-        includeSchemas = ScalazJson4sUtils
-          .extract[String](config, "parameters", "includeSchemas")
+        includeSchemes = ScalazJson4sUtils
+          .extract[String](config, "parameters", "includeSchemes")
           .toOption
           .flatMap(v => Try(v.toBoolean).toOption)
           .getOrElse(false)
-        enrich = RefererParserEnrichment(param, referers, includeSchemas)
+        enrich = RefererParserEnrichment(param, referers, includeSchemes)
       } yield enrich).toValidationNel
     })
 
@@ -92,9 +81,9 @@ object RefererParserEnrichment extends ParseableEnrichment {
  * @param domains List of internal domains
  */
 case class RefererParserEnrichment(
-  domains: List[String],
-  referersPath: Option[String],
-  includeSchemas: Boolean = false
+                                    domains: List[String],
+                                    referersPath: Option[String],
+                                    treatNonStandardSchemeAsValid: Boolean = false
 ) extends Enrichment {
 
   private val referersJsonPath = referersPath.getOrElse("/referers.json")
@@ -120,7 +109,7 @@ case class RefererParserEnrichment(
    *         source and term, all Strings
    */
   def extractRefererDetails(uri: URI, pageHost: String): EitherT[IO, Exception, Option[Referer]] = {
-    val fixedURI = if (includeSchemas) new URIBuilder(uri.toString).setScheme("http").build else uri
+    val fixedURI = if (treatNonStandardSchemeAsValid) new URIBuilder(uri.toString).setScheme("http").build else uri
     val io: EitherT[IO, Exception, Option[Referer]] = for {
       parser <- EitherT(Parser.create[IO](getClass.getResource(referersJsonPath).getPath))
       r <- EitherT

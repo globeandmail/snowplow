@@ -81,9 +81,9 @@ object RefererParserEnrichment extends ParseableEnrichment {
  * @param domains List of internal domains
  */
 case class RefererParserEnrichment(
-                                    domains: List[String],
-                                    referersPath: Option[String],
-                                    treatNonStandardSchemeAsValid: Boolean = false
+  domains: List[String],
+  referersPath: Option[String],
+  treatNonStandardSchemeAsValid: Boolean = false
 ) extends Enrichment {
 
   private val referersJsonPath = referersPath.getOrElse("/referers.json")
@@ -113,7 +113,8 @@ case class RefererParserEnrichment(
     val io: EitherT[IO, Exception, Option[Referer]] = for {
       parser <- EitherT(Parser.create[IO](getClass.getResource(referersJsonPath).getPath))
       r <- EitherT
-        .fromOption[IO](parser.parse(fixedURI, Some(pageHost), domains), new Exception("No parseable referer found in the URI"))
+        .fromOption[IO](parser.parse(fixedURI, Some(pageHost), domains),
+                        new Exception("No parsable referer found in the URI"))
       t = r match {
         case s: SearchReferer => s.term.flatMap(t => CU.fixTabsNewlines(t))
         case _                => None

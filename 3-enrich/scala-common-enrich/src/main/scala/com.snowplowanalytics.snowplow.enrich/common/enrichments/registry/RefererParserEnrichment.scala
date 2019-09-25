@@ -49,7 +49,7 @@ object RefererParserEnrichment extends ParseableEnrichment {
 
   implicit val formats = DefaultFormats
 
-  val supportedSchema = SchemaCriterion("com.globeandmail", "sophi_referer_parser", "jsonschema", 1, 0)
+  val supportedSchema = SchemaCriterion("com.globeandmail", "referer_parser", "jsonschema", 1, 0)
 
   /**
    * Creates a RefererParserEnrichment instance from a JValue.

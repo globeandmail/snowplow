@@ -87,20 +87,15 @@ class ExtractRefererDetailsSpec extends Specification with DataTables {
 
   def e3 = {
     val uri = new URI("android-app://m.facebook.com")
-    val value: IO[Option[Referer]] = RefererParserEnrichment(List(), None, true)
+    val value: IO[Option[Referer]] = RefererParserEnrichment(List(), None)
       .extractRefererDetails(uri, PageHost)
       .getOrElse(None)
     value.unsafeRunSync() must beSome(SocialReferer("Facebook"))
-
-    val value2: IO[Option[Referer]] = RefererParserEnrichment(List(), None, false)
-      .extractRefererDetails(uri, PageHost)
-      .getOrElse(None)
-    value2.unsafeRunSync() must beNone
   }
 
   def e4 = {
     val uri = new URI("android-app://com.google.android.googlequicksearchbox")
-    val value: IO[Option[Referer]] = RefererParserEnrichment(List(), None, true)
+    val value: IO[Option[Referer]] = RefererParserEnrichment(List(), None)
       .extractRefererDetails(uri, PageHost)
       .getOrElse(None)
     value.unsafeRunSync() must beSome(SearchReferer("Google", None))

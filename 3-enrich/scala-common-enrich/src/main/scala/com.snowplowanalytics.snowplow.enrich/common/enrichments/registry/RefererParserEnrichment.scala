@@ -64,11 +64,7 @@ object RefererParserEnrichment extends ParseableEnrichment {
       (for {
         param <- ScalazJson4sUtils.extract[List[String]](config, "parameters", "internalDomains")
         referers = ScalazJson4sUtils.extract[String](config, "parameters", "referersLocation").toOption
-        includeSchemes = ScalazJson4sUtils
-          .extract[Boolean](config, "parameters", "includeSchemes")
-          .toOption
-          .getOrElse(false)
-        enrich = RefererParserEnrichment(param, referers, includeSchemes)
+        enrich   = RefererParserEnrichment(param, referers)
       } yield enrich).toValidationNel
     })
 
@@ -78,11 +74,11 @@ object RefererParserEnrichment extends ParseableEnrichment {
  * Config for a referer_parser enrichment
  *
  * @param domains List of internal domains
+ * @param referersPath Location of referers JSON
  */
 case class RefererParserEnrichment(
   domains: List[String],
-  referersPath: Option[String],
-  treatNonStandardSchemeAsValid: Boolean = false
+  referersPath: Option[String]
 ) extends Enrichment {
 
   private val referersJsonPath = referersPath.getOrElse("/referers.json")
@@ -108,7 +104,9 @@ case class RefererParserEnrichment(
    *         source and term, all Strings
    */
   def extractRefererDetails(uri: URI, pageHost: String): EitherT[IO, Exception, Option[Referer]] = {
-    val fixedURI = if (treatNonStandardSchemeAsValid) new URIBuilder(uri.toString).setScheme("http").build else uri
+    val validSchemes = Seq("android-app")
+    val fixedURI =
+      if (validSchemes.contains(uri.getScheme)) new URIBuilder(uri.toString).setScheme("http").build else uri
     val io: EitherT[IO, Exception, Option[Referer]] = for {
       parser <- EitherT(Parser.create[IO](getClass.getResource(referersJsonPath).getPath))
       r <- EitherT

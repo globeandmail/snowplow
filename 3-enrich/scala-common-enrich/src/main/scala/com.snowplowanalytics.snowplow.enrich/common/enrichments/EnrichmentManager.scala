@@ -17,6 +17,20 @@ package common
 package enrichments
 
 // Joda
+import com.snowplowanalytics.refererparser.{
+  EmailMedium,
+  EmailReferer,
+  InternalMedium,
+  InternalReferer,
+  PaidMedium,
+  PaidReferer,
+  SearchMedium,
+  SearchReferer,
+  SocialMedium,
+  SocialReferer,
+  UnknownMedium,
+  UnknownReferer
+}
 import org.joda.time.DateTime
 
 // Iglu
@@ -400,11 +414,40 @@ object EnrichmentManager {
       // Set the referrer details
       registry.getRefererParserEnrichment match {
         case Some(rp) => {
-          for (refr <- rp.extractRefererDetails(u, event.page_urlhost)) {
-            event.refr_medium = CU.makeTsvSafe(refr.medium.toString)
-            event.refr_source = CU.makeTsvSafe(refr.source.orNull)
-            event.refr_term   = CU.makeTsvSafe(refr.term.orNull)
+          val io = rp.extractRefererDetails(u, event.page_urlhost).map {
+            case Some(SearchReferer(source, term)) => {
+              event.refr_medium = CU.makeTsvSafe(SearchMedium.value)
+              event.refr_source = CU.makeTsvSafe(source)
+              event.refr_term   = CU.makeTsvSafe(term.orNull)
+            }
+            case Some(InternalReferer) => {
+              event.refr_medium = CU.makeTsvSafe(InternalMedium.value)
+              event.refr_source = CU.makeTsvSafe(null)
+              event.refr_term   = CU.makeTsvSafe(null)
+            }
+            case Some(SocialReferer(source)) => {
+              event.refr_medium = CU.makeTsvSafe(SocialMedium.value)
+              event.refr_source = CU.makeTsvSafe(source)
+              event.refr_term   = CU.makeTsvSafe(null)
+            }
+            case Some(EmailReferer(source)) => {
+              event.refr_medium = CU.makeTsvSafe(EmailMedium.value)
+              event.refr_source = CU.makeTsvSafe(source)
+              event.refr_term   = CU.makeTsvSafe(null)
+            }
+            case Some(PaidReferer(source)) => {
+              event.refr_medium = CU.makeTsvSafe(PaidMedium.value)
+              event.refr_source = CU.makeTsvSafe(source)
+              event.refr_term   = CU.makeTsvSafe(null)
+            }
+            case Some(UnknownReferer) => {
+              event.refr_medium = CU.makeTsvSafe(UnknownMedium.value)
+              event.refr_source = CU.makeTsvSafe(null)
+              event.refr_term   = CU.makeTsvSafe(null)
+            }
+            case None => ()
           }
+          io.value.unsafeRunSync()
         }
         case None => unitSuccess
       }

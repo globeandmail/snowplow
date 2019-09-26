@@ -20,29 +20,26 @@ package registry
 // Java
 import java.net.URI
 
-// Maven Artifact
-import org.apache.maven.artifact.versioning.DefaultArtifactVersion
+// Apache
+import org.apache.http.client.utils.URIBuilder
 
-// Scalaz
+// Scala
+import scala.util.Try
+import cats.data.EitherT
+import cats.effect.IO
 import scalaz._
-import Scalaz._
 
 // json4s
 import org.json4s.{DefaultFormats, JValue}
 
 // Iglu
-import iglu.client.{SchemaCriterion, SchemaKey}
-import iglu.client.validation.ProcessingMessageMethods._
+import com.snowplowanalytics.iglu.client.{SchemaCriterion, SchemaKey}
 
 // Snowplow referer-parser
-import com.snowplowanalytics.refererparser.scala.{Parser => RefererParser}
-import com.snowplowanalytics.refererparser.scala.Referer
+import com.snowplowanalytics.refererparser.{Parser, Referer, SearchReferer}
 
 // This project
-import utils.{ConversionUtils => CU}
-import utils.MapTransformer
-import utils.MapTransformer._
-import utils.ScalazJson4sUtils
+import com.snowplowanalytics.snowplow.enrich.common.utils.{ScalazJson4sUtils, ConversionUtils => CU}
 
 /**
  * Companion object. Lets us create a
@@ -52,7 +49,7 @@ object RefererParserEnrichment extends ParseableEnrichment {
 
   implicit val formats = DefaultFormats
 
-  val supportedSchema = SchemaCriterion("com.snowplowanalytics.snowplow", "referer_parser", "jsonschema", 1, 0)
+  val supportedSchema = SchemaCriterion("com.globeandmail", "referer_parser", "jsonschema", 1, 0)
 
   /**
    * Creates a RefererParserEnrichment instance from a JValue.
@@ -66,7 +63,8 @@ object RefererParserEnrichment extends ParseableEnrichment {
     isParseable(config, schemaKey).flatMap(conf => {
       (for {
         param <- ScalazJson4sUtils.extract[List[String]](config, "parameters", "internalDomains")
-        enrich = RefererParserEnrichment(param)
+        referers = ScalazJson4sUtils.extract[String](config, "parameters", "referersLocation").toOption
+        enrich   = RefererParserEnrichment(param, referers)
       } yield enrich).toValidationNel
     })
 
@@ -76,16 +74,20 @@ object RefererParserEnrichment extends ParseableEnrichment {
  * Config for a referer_parser enrichment
  *
  * @param domains List of internal domains
+ * @param referersPath Location of referers JSON
  */
 case class RefererParserEnrichment(
-  domains: List[String]
+  domains: List[String],
+  referersPath: Option[String]
 ) extends Enrichment {
+
+  private val referersJsonPath = referersPath.getOrElse("/referers.json")
 
   /**
    * A Scalaz Lens to update the term within
    * a Referer object.
    */
-  private val termLens: Lens[Referer, MaybeString] = Lens.lensu((r, newTerm) => r.copy(term = newTerm), _.term)
+  private val termLens: Lens[SearchReferer, MaybeString] = Lens.lensu((r, newTerm) => r.copy(term = newTerm), _.term)
 
   /**
    * Extract details about the referer (sic).
@@ -101,9 +103,25 @@ case class RefererParserEnrichment(
    * @return a Tuple3 containing referer medium,
    *         source and term, all Strings
    */
-  def extractRefererDetails(uri: URI, pageHost: String): Option[Referer] =
-    for {
-      r <- RefererParser.parse(uri, pageHost, domains)
-      t = r.term.flatMap(t => CU.fixTabsNewlines(t))
-    } yield termLens.set(r, t)
+  def extractRefererDetails(uri: URI, pageHost: String): EitherT[IO, Exception, Option[Referer]] = {
+    val validSchemes = Seq("android-app")
+    val fixedURI =
+      if (validSchemes.contains(uri.getScheme)) new URIBuilder(uri.toString).setScheme("http").build else uri
+    val io: EitherT[IO, Exception, Option[Referer]] = for {
+      parser <- EitherT(Parser.create[IO](getClass.getResource(referersJsonPath).getPath))
+      r <- EitherT
+        .fromOption[IO](parser.parse(fixedURI, Some(pageHost), domains),
+                        new Exception("No parsable referer found in the URI"))
+      t = r match {
+        case s: SearchReferer => s.term.flatMap(t => CU.fixTabsNewlines(t))
+        case _                => None
+      }
+    } yield {
+      (r, t) match {
+        case (r: SearchReferer, s) => if (s.isDefined) Some(r.copy(term = s)) else Some(r)
+        case _                     => Some(r)
+      }
+    }
+    io
+  }
 }

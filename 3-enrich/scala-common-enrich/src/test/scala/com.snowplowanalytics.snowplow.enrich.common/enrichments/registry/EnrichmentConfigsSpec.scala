@@ -121,7 +121,8 @@ class EnrichmentConfigsSpec extends Specification with ValidationMatchers with D
       val schemaKey = SchemaKey("com.snowplowanalytics.snowplow", "referer_parser", "jsonschema", "1-0-0")
 
       val expected =
-        RefererParserEnrichment(List("www.subdomain1.snowplowanalytics.com", "www.subdomain2.snowplowanalytics.com"))
+        RefererParserEnrichment(List("www.subdomain1.snowplowanalytics.com", "www.subdomain2.snowplowanalytics.com"),
+                                None)
 
       val result = RefererParserEnrichment.parse(refererParserJson, schemaKey)
       result must beSuccessful(expected)

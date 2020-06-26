@@ -36,6 +36,8 @@ import software.amazon.kinesis.exceptions.ThrottlingException
 import software.amazon.kinesis.metrics.NullMetricsFactory
 import software.amazon.kinesis.processor.{RecordProcessorCheckpointer, ShardRecordProcessorFactory}
 import software.amazon.kinesis.retrieval.KinesisClientRecord
+import software.amazon.kinesis.retrieval.RetrievalConfig
+import software.amazon.kinesis.retrieval.polling.PollingConfig
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient
 import software.amazon.awssdk.services.cloudwatch.CloudWatchAsyncClient
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient
@@ -109,6 +111,8 @@ class KinesisSource private (
 ) extends Source(client, adapterRegistry, enrichmentRegistry, processor, config.out.partitionKey) {
 
   override val MaxRecordSize = Some(1000000)
+  private val DYANMODB_DEFAULT_INITIAL_RCU = 10
+  private val DYANMODB_DEFAULT_INITIAL_WCU = 10
 
   private val kClient = {
     val endpointConfiguration =
@@ -194,31 +198,37 @@ class KinesisSource private (
       rawEventProcessorFactory
     )
 
-    val position = InitialPositionInStream.valueOf(kinesisConfig.initialPosition)
-    val position2 = kinesisConfig.timestamp.right.toOption
-      .filter(_ => position == InitialPositionInStream.AT_TIMESTAMP)
+    val posititionValue = InitialPositionInStream.valueOf(kinesisConfig.initialPosition)
+    val position = kinesisConfig.timestamp.right.toOption
+      .filter(_ => posititionValue == InitialPositionInStream.AT_TIMESTAMP)
       .map(InitialPositionInStreamExtended.newInitialPositionAtTimestamp(_))
-      .getOrElse(InitialPositionInStreamExtended.newInitialPosition(position))
+      .getOrElse(InitialPositionInStreamExtended.newInitialPosition(posititionValue))
 
     val metricFactory = kinesisConfig.disableCloudWatch match {
       case Some(true) => new NullMetricsFactory()
       case _ => null // KCL internally creates it.
     }
 
-    // where to put maxrecords to fetch?
+    //Enhanced fan-out is the default retrieval behavior for KCL 2.x. So we have to override it.
+    val retrievalConfig = kinesisConfig.maxRecords match {
+      case Some(maxRecordsCount)=> configsBuilder.retrievalConfig()
+        .retrievalSpecificConfig(
+          new PollingConfig(config.in.raw, kinesisClient).maxRecords(maxRecordsCount))
+      case None => configsBuilder.retrievalConfig()
+    }
+
     val scheduler = new Scheduler(
       configsBuilder.checkpointConfig(),
       configsBuilder.coordinatorConfig(),
       configsBuilder
         .leaseManagementConfig()
-        // to do: make these below configurations.
-        .initialLeaseTableReadCapacity(10)
-        .initialLeaseTableWriteCapacity(10)
-        .initialPositionInStream(position2),
+        .initialLeaseTableReadCapacity(kinesisConfig.dynamodbInitialRCU.getOrElse(DYANMODB_DEFAULT_INITIAL_RCU))
+        .initialLeaseTableWriteCapacity(kinesisConfig.dynamodbInitialWCU.getOrElse(DYANMODB_DEFAULT_INITIAL_WCU))
+        .initialPositionInStream(position),
       configsBuilder.lifecycleConfig(),
       configsBuilder.metricsConfig().metricsFactory(metricFactory),
       configsBuilder.processorConfig().callProcessRecordsEvenForEmptyRecordList(true),
-      configsBuilder.retrievalConfig()
+      retrievalConfig
     )
 
     scheduler.run()

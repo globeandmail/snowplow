@@ -282,7 +282,6 @@ class KinesisSource private (
 
     def shardEnded(shardEndedInput: ShardEndedInput) =
       try {
-        // Not sure if this is the best behavior. Probably shouldn't checkpoint any more and exit.
         log.info(s"Shard ended for shard: $kinesisShardId")
         shardEndedInput.checkpointer().checkpoint()
       } catch {

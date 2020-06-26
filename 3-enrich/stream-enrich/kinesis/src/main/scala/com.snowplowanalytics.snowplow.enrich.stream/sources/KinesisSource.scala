@@ -28,6 +28,7 @@ import scala.util.control.NonFatal
 import cats.Id
 import cats.syntax.either._
 import com.amazonaws.auth.AWSCredentialsProvider
+import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider
 import com.amazonaws.client.builder.AwsClientBuilder.EndpointConfiguration
 import com.amazonaws.services.kinesis.AmazonKinesisClientBuilder
 import software.amazon.kinesis.common.{InitialPositionInStream, InitialPositionInStreamExtended}
@@ -35,7 +36,6 @@ import software.amazon.kinesis.exceptions.ThrottlingException
 import software.amazon.kinesis.metrics.NullMetricsFactory
 import software.amazon.kinesis.processor.{RecordProcessorCheckpointer, ShardRecordProcessorFactory}
 import software.amazon.kinesis.retrieval.KinesisClientRecord
-import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient
 import software.amazon.awssdk.services.cloudwatch.CloudWatchAsyncClient
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient
@@ -58,7 +58,8 @@ import com.snowplowanalytics.snowplow.scalatracker.Tracker
 import io.circe.Json
 import model.{Kinesis, StreamsConfig}
 import sinks._
-import utils.getAWSCredentialsProvider
+import software.amazon.awssdk.regions.Region
+import utils.{getAWSCredentialsProvider, getAwsCredentialsProvider}
 
 /** KinesisSource companion object with factory method */
 object KinesisSource {
@@ -79,7 +80,8 @@ object KinesisSource {
       _ <- KinesisSink.validate(kinesisConfig, config.out.enriched)
       _ <- utils.validatePii(emitPii, config.out.pii)
       _ <- KinesisSink.validate(kinesisConfig, config.out.bad)
-      provider <- getAWSCredentialsProvider(kinesisConfig.aws)
+      sourceProvider <- getAwsCredentialsProvider(kinesisConfig.aws)
+      sinkProvider <- getAWSCredentialsProvider(kinesisConfig.aws)
     } yield new KinesisSource(
       client,
       adapterRegistry,
@@ -88,7 +90,8 @@ object KinesisSource {
       processor,
       config,
       kinesisConfig,
-      provider
+      sourceProvider,
+      sinkProvider
     )
 }
 
@@ -101,7 +104,8 @@ class KinesisSource private (
   processor: Processor,
   config: StreamsConfig,
   kinesisConfig: Kinesis,
-  provider: AWSCredentialsProvider
+  sourceProvider: AwsCredentialsProvider,
+  sinkProvider: AWSCredentialsProvider
 ) extends Source(client, adapterRegistry, enrichmentRegistry, processor, config.out.partitionKey) {
 
   override val MaxRecordSize = Some(1000000)
@@ -111,7 +115,7 @@ class KinesisSource private (
       new EndpointConfiguration(kinesisConfig.streamEndpoint, kinesisConfig.region)
     AmazonKinesisClientBuilder
       .standard()
-      .withCredentials(provider)
+      .withCredentials(sinkProvider)
       .withEndpointConfiguration(endpointConfiguration)
       .build()
   }
@@ -158,21 +162,22 @@ class KinesisSource private (
     log.info("Using workerId: " + workerId)
 
     val kinesisClient = KinesisClientUtil.createKinesisAsyncClient(
-      KinesisAsyncClient.builder()
-        .credentialsProvider(provider)
+      KinesisAsyncClient
+        .builder()
+        .credentialsProvider(sourceProvider)
         .endpointOverride(new URI(kinesisConfig.streamEndpoint))
-      .region(kinesisConfig.region))
+        .region(Region.of(kinesisConfig.region))
+    )
     val dynamoClient = DynamoDbAsyncClient
       .builder()
-      .credentialsProvider(provider)
-      .region(kinesisConfig.region)
+      .credentialsProvider(sourceProvider)
+      .region(Region.of(kinesisConfig.region))
       .build()
-    val cloudWatchClient = CloudWatchAsyncClient.builder()
-      .credentialsProvider(provider)
-      .region(kinesisConfig.region)
+    val cloudWatchClient = CloudWatchAsyncClient
+      .builder()
+      .credentialsProvider(sourceProvider)
+      .region(Region.of(kinesisConfig.region))
       .build()
-
-
 
     log.info(s"Running: ${config.appName}.")
     log.info(s"Processing raw input stream: ${config.in.raw}")
@@ -180,12 +185,14 @@ class KinesisSource private (
     val rawEventProcessorFactory = new RawEventProcessorFactory()
 
     val configsBuilder = new ConfigsBuilder(
-      config.in.raw, config.appName,
+      config.in.raw,
+      config.appName,
       kinesisClient,
       dynamoClient,
       cloudWatchClient,
       workerId,
-      rawEventProcessorFactory)
+      rawEventProcessorFactory
+    )
 
     val position = InitialPositionInStream.valueOf(kinesisConfig.initialPosition)
     val position2 = kinesisConfig.timestamp.right.toOption
@@ -202,11 +209,12 @@ class KinesisSource private (
     val scheduler = new Scheduler(
       configsBuilder.checkpointConfig(),
       configsBuilder.coordinatorConfig(),
-      configsBuilder.leaseManagementConfig()
+      configsBuilder
+        .leaseManagementConfig()
+        // to do: make these below configurations.
         .initialLeaseTableReadCapacity(10)
         .initialLeaseTableWriteCapacity(10)
-        .initialPositionInStream(position2)
-      ,
+        .initialPositionInStream(position2),
       configsBuilder.lifecycleConfig(),
       configsBuilder.metricsConfig().metricsFactory(metricFactory),
       configsBuilder.processorConfig().callProcessRecordsEvenForEmptyRecordList(true),
@@ -219,7 +227,7 @@ class KinesisSource private (
   // Factory needed by the Amazon Kinesis Consumer library to
   // create a processor.
   class RawEventProcessorFactory extends ShardRecordProcessorFactory {
-    override def shardRecordProcessor:ShardRecordProcessor = new RawEventProcessor()
+    override def shardRecordProcessor: ShardRecordProcessor = new RawEventProcessor()
   }
 
   // Process events from a Kinesis stream.
@@ -227,6 +235,7 @@ class KinesisSource private (
     private var kinesisShardId: String = _
 
     // Backoff and retry settings.
+    // make these configurations with default values.
     private val BACKOFF_TIME_IN_MILLIS = 3000L
     private val NUM_RETRIES = 10
 
@@ -235,9 +244,7 @@ class KinesisSource private (
       this.kinesisShardId = initializationInput.shardId()
     }
 
-    override def processRecords(
-       processRecordsInput: ProcessRecordsInput
-    ) = {
+    override def processRecords(processRecordsInput: ProcessRecordsInput) = {
 
       if (!processRecordsInput.records().isEmpty) {
         log.info(s"Processing ${processRecordsInput.records().size()} records from $kinesisShardId")
@@ -259,34 +266,32 @@ class KinesisSource private (
           false
       }
 
-
-    def leaseLost(leaseLostInput: LeaseLostInput) {
+    def leaseLost(leaseLostInput: LeaseLostInput) =
       // do nothing. the other processor will take care of it.
       log.info(s"Least lost  ${leaseLostInput}")
-    }
 
-    def shardEnded(shardEndedInput: ShardEndedInput ) {
+    def shardEnded(shardEndedInput: ShardEndedInput) =
       try {
         // Not sure if this is the best behavior. Probably shouldn't checkpoint any more and exit.
         log.info(s"Shard ended for shard: $kinesisShardId")
         shardEndedInput.checkpointer().checkpoint()
       } catch {
-        case e: ShutdownException | InvalidStateException =>
-          log.error(s"Caught exception for endedShard ", e)
+        case e: ShutdownException =>
+          log.error(s"Caught ShutdownException for endedShard ", e)
+        case e: InvalidStateException =>
+          log.error(s"Caught InvalidStateException for endedShard ", e)
       }
-    }
 
-    def shutdownRequested(shutdownRequestedInput: ShutdownRequestedInput) {
+    def shutdownRequested(shutdownRequestedInput: ShutdownRequestedInput) =
       try {
         log.info(s"Shutting down record processor for shard: $kinesisShardId")
         shutdownRequestedInput.checkpointer().checkpoint()
       } catch {
-        case e: ShutdownException | InvalidStateException  =>
-          log.error(s"Caught exception for shutdownRequestedInput", e)
-
+        case e: ShutdownException =>
+          log.error(s"Caught ShutdownException for shutdownRequestedInput", e)
+        case e: InvalidStateException =>
+          log.error(s"Caught InvalidStateException for shutdownRequestedInput", e)
       }
-
-    }
 
     private def checkpoint(checkpointer: RecordProcessorCheckpointer) = {
       log.info(s"Checkpointing shard $kinesisShardId")

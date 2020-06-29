@@ -211,9 +211,12 @@ class KinesisSource private (
 
     //Enhanced fan-out is the default retrieval behavior for KCL 2.x. So we have to override it.
     val retrievalConfig = kinesisConfig.maxRecords match {
-      case Some(maxRecordsCount)=> configsBuilder.retrievalConfig()
-        .retrievalSpecificConfig(
-          new PollingConfig(config.in.raw, kinesisClient).maxRecords(maxRecordsCount))
+      case Some(maxRecordsCount) =>
+        configsBuilder
+          .retrievalConfig()
+          .retrievalSpecificConfig(
+            new PollingConfig(config.in.raw, kinesisClient).maxRecords(maxRecordsCount)
+          )
       case None => configsBuilder.retrievalConfig()
     }
 
@@ -222,8 +225,12 @@ class KinesisSource private (
       configsBuilder.coordinatorConfig(),
       configsBuilder
         .leaseManagementConfig()
-        .initialLeaseTableReadCapacity(kinesisConfig.dynamodbInitialRCU.getOrElse(DYANMODB_DEFAULT_INITIAL_RCU))
-        .initialLeaseTableWriteCapacity(kinesisConfig.dynamodbInitialWCU.getOrElse(DYANMODB_DEFAULT_INITIAL_WCU))
+        .initialLeaseTableReadCapacity(
+          kinesisConfig.dynamodbInitialRCU.getOrElse(DYANMODB_DEFAULT_INITIAL_RCU)
+        )
+        .initialLeaseTableWriteCapacity(
+          kinesisConfig.dynamodbInitialWCU.getOrElse(DYANMODB_DEFAULT_INITIAL_WCU)
+        )
         .initialPositionInStream(position),
       configsBuilder.lifecycleConfig(),
       configsBuilder.metricsConfig().metricsFactory(metricFactory),
@@ -277,8 +284,8 @@ class KinesisSource private (
       }
 
     def leaseLost(leaseLostInput: LeaseLostInput) =
-      // do nothing. the other processor will take care of it.
-      log.info(s"Least lost  ${leaseLostInput}")
+      // do nothing, the new shard processor will take care of it.
+      log.info(s"Lease lost  ${leaseLostInput}")
 
     def shardEnded(shardEndedInput: ShardEndedInput) =
       try {

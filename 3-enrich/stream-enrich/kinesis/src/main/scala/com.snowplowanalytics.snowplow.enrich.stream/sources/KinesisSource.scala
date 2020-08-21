@@ -36,7 +36,6 @@ import software.amazon.kinesis.exceptions.ThrottlingException
 import software.amazon.kinesis.metrics.NullMetricsFactory
 import software.amazon.kinesis.processor.{RecordProcessorCheckpointer, ShardRecordProcessorFactory}
 import software.amazon.kinesis.retrieval.KinesisClientRecord
-import software.amazon.kinesis.retrieval.RetrievalConfig
 import software.amazon.kinesis.retrieval.polling.PollingConfig
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient
 import software.amazon.awssdk.services.cloudwatch.CloudWatchAsyncClient
@@ -198,11 +197,11 @@ class KinesisSource private (
       rawEventProcessorFactory
     )
 
-    val posititionValue = InitialPositionInStream.valueOf(kinesisConfig.initialPosition)
+    val positionValue = InitialPositionInStream.valueOf(kinesisConfig.initialPosition)
     val position = kinesisConfig.timestamp.right.toOption
-      .filter(_ => posititionValue == InitialPositionInStream.AT_TIMESTAMP)
+      .filter(_ => positionValue == InitialPositionInStream.AT_TIMESTAMP)
       .map(InitialPositionInStreamExtended.newInitialPositionAtTimestamp(_))
-      .getOrElse(InitialPositionInStreamExtended.newInitialPosition(posititionValue))
+      .getOrElse(InitialPositionInStreamExtended.newInitialPosition(positionValue))
 
     val metricFactory = kinesisConfig.disableCloudWatch match {
       case Some(true) => new NullMetricsFactory()

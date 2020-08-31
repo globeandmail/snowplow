@@ -22,7 +22,13 @@ object BuildSettings {
     assemblyJarName in assembly := { s"${moduleName.value}-${version.value}.jar" },
     assemblyMergeStrategy in assembly := {
       case x if x.endsWith("ProjectSettings$.class") => MergeStrategy.first
-      case x if x.endsWith("module-info.class") => MergeStrategy.first
+      case x if x.contains("module-info.class") =>  MergeStrategy.discard
+      case x if x.contains("mime.types") => MergeStrategy.last
+      case PathList("codegen-resources", "service-2.json")  => MergeStrategy.first
+      case PathList("META-INF", "io.netty.versions.properties") => MergeStrategy.first
+      case x if x.endsWith("/waiters-2.json") => MergeStrategy.first
+      case x if x.endsWith("customization.config") => MergeStrategy.first
+      case x if x.endsWith("paginators-1.json") => MergeStrategy.first
       case x =>
         val oldStrategy = (assemblyMergeStrategy in assembly).value
         oldStrategy(x)
